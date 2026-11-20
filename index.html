@@ -3,9 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <link rel="stylesheet" href="styles.css">
+    <meta name="theme-color" content="#f6f4eb">
+    <title>BuyIt</title>
 </head>
-<body>
-    
+<body class="login-page">
+    <header class="site-header wrap">
+        <a class="wordmark" href="index.html">BuyIt<span>:)</span></a>
+    </header>
+      <main class="login-layout wrap" id="main">
+    <section class="login-panel">
+      <div class="login-content">
+        <h1>Think It Buy It.</h1>
+        <p class="intro">Sign in to shop or manage your store.</p>
+        <form id="login-form">
+          <label for="identity">Email or user ID</label>
+          <input id="identity" name="identity" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Enter your email or user ID" required>
+          <label for="password">Password</label>
+          <div class="password-field">
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
+            <button type="button" id="toggle-password" class="text-button" aria-controls="password" aria-pressed="false">Show</button>
+          </div>
+          <p class="form-error" id="login-error" role="alert" hidden></p>
+          <button class="button primary submit" type="submit">Sign in</button>
+        </form>
+      </div>
+    </section>
+    <div class="login-image">
+      <img src="assets/hero.webp" alt="A ceramic mug, canvas bag and yellow desk lamp on a blue table" fetchpriority="high">
+    </div>
+  </main>
 </body>
 </html>

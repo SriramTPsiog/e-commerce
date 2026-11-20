@@ -1,0 +1,24 @@
+:root {
+  --page: #f7f5ed;
+  --paper: #fffdf6;
+  --ink: #1d2218;
+  --muted: #575b50;
+  --line: #cfcec1;
+  --lime: #e9f499;
+  --lime-deep: #dbe87e;
+  --blue: #253cb8;
+  --blue-deep: #1c2d87;
+  --blue-light: #e0e6ff;
+  --white: #fff;
+  --error: #9d2b23;
+  --error-paper: #fbe7e0;
+  --success: #295233;
+  --success-paper: #e4eddb;
+  --neutral: #eceade;
+  --shadow: #20231523;
+  --scrim: #1b211a74;
+  --font: "Geist", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --radius: 0.25rem;
+  --frame: 80rem;
+  --space: clamp(1.1rem, 4vw, 4rem);
+}
