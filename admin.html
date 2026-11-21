@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BuyIt :)</title>
+  <title>BuyIt Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/admin.css">
 </head>
 <body>
+  <a class="skip-link" href="#admin-main">Skip to dashboard</a>
   <aside class="sidebar">
     <a class="brand" href="./admin.html">BuyIt :)</a>
     <nav aria-label="Admin sections" hidden id="navigation">
@@ -22,7 +23,7 @@
     </nav>
     <button id="logout" class="quiet" hidden>Sign out</button>
   </aside>
-  <main>
+  <main id="admin-main" tabindex="-1">
     <header class="bar"><h1 id="view-title">Overview</h1><div id="session"></div></header>
     <p id="notice" role="status">Checking admin access…</p>
     <section id="content" aria-labelledby="view-title"></section>
