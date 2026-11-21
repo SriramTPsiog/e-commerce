@@ -5,4 +5,4 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 FIREBASE_PROJECT_ID = "e-commerce-psiog"
-SHOP_ORIGIN = "https://YOUR-GITHUB-USERNAME.github.io"
+SHOP_ORIGIN = "https://sriramtpsiog.github.io"
