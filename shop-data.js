@@ -12,7 +12,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 // Replace with the HTTPS URL printed by Wrangler after deploying the Worker.
-const checkoutUrl = "https://YOUR-WORKER.workers.dev/checkout";
+const checkoutUrl = "https://buyit-checkout.e-commerce-sriramtpsiog.workers.dev/checkout";
 const record = snapshot => ({...snapshot.data(), id: snapshot.id});
 
 function linkedBag(customerId) {
