@@ -1,11 +1,40 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BuyIt :)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/admin.css">
 </head>
 <body>
-    
+  <aside class="sidebar">
+    <a class="brand" href="./admin.html">BuyIt :)</a>
+    <nav aria-label="Admin sections" hidden id="navigation">
+      <button data-view="Overview" aria-current="page">Overview</button>
+      <button data-view="Products">Products</button>
+      <button data-view="Orders">Orders</button>
+      <button data-view="Customers">Customers</button>
+      <button data-view="Reports">Reports</button>
+      <button data-view="Settings">Settings</button>
+    </nav>
+    <button id="logout" class="quiet" hidden>Sign out</button>
+  </aside>
+  <main>
+    <header class="bar"><h1 id="view-title">Overview</h1><div id="session"></div></header>
+    <p id="notice" role="status">Checking admin access…</p>
+    <section id="content" aria-labelledby="view-title"></section>
+  </main>
+  <dialog id="editor" aria-labelledby="editor-title">
+    <form id="editor-form">
+      <header class="row"><h2 id="editor-title"></h2><button type="button" id="close-editor" class="quiet" aria-label="Close editor">Close</button></header>
+      <div id="fields"></div>
+      <p id="editor-status" role="status"></p>
+      <button type="submit" id="save">Save changes</button>
+    </form>
+  </dialog>
+  <script type="module" src="./admin.js"></script>
 </body>
 </html>
