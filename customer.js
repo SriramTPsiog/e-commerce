@@ -10,8 +10,8 @@ const priceOK = p => Number.isSafeInteger(p?.pricePaise) && p.pricePaise >= 0;
 const available = p => priceOK(p) && Number.isSafeInteger(p.qty) && p.qty > 0;
 const price = p => priceOK(p) ? money.format(p.pricePaise / 100) : "Price unavailable";
 const categoryName = p => categories.get(p.categoryId) || p.categoryId || "Uncategorized";
-let shop, cursor, pendingBatch, done = false, page = 0, revision = 0;
-let bagItems = [], changingBag = false, noticeTimer;
+let shop, cursor, pendingBatch, done = false, page = 0, revision = 0, loadingCatalog = false;
+let bagItems = [], changingBag, bagLoad, clearNotice;
 let applied, selectedDetail, visibleIds = [], watcherKey = "", stopWatching;
 let checkoutBusy = false, bagReady = false, credit, creditMessage = "", quotedTotal = null;
 let stockUpdates = new Map(), syncingStock = false;
@@ -36,11 +36,13 @@ function friendly(error, context) {
   return context + (error?.message ? " " + error.message : "");
 }
 function notify(message) {
-  clearTimeout(noticeTimer);
+  clearNotice?.();
   const open = document.querySelector("dialog[open]");
   const output = open?.querySelector(".dialog-note") || $("announcement");
   output.textContent = message;
-  noticeTimer = setTimeout(() => { output.textContent = ""; }, 5200);
+  function clear() { output.textContent = ""; }
+  const timer = setTimeout(clear,5200);
+  clearNotice = () => { clearTimeout(timer); clear(); };
 }
 function picture(p) {
   const src = p.imageUrl;
@@ -64,22 +66,28 @@ function addButton(p) {
 }
 function paintControl(control,p) {
   const qty = bagItems.find(i => i.productId === p.id)?.qty || 0;
-  const locked = changingBag || checkoutBusy || !!pending();
+  const locked = Boolean(changingBag || bagLoad || checkoutBusy || pending());
+  const current = control.firstElementChild;
   if (!qty) {
-    const add = button(available(p) ? "Add to bag" : "Unavailable",() => changeBag(p.id,1));
+    const add = current?.tagName === "BUTTON" ? current : button("",() => changeBag(p.id,1));
+    add.textContent = available(p) ? "Add to bag" : "Unavailable";
     add.disabled = locked || !available(p);
-    control.replaceChildren(add);
+    if (add !== current) control.replaceChildren(add);
     return;
   }
-  const stepper = element("div","stepper");
-  const minus = button("−",() => changeBag(p.id,-1),"");
-  const plus = button("+",() => changeBag(p.id,1),"");
+  let stepper = current;
+  if (!stepper?.classList.contains("stepper")) {
+    stepper = element("div","stepper");
+    stepper.append(button("−",() => changeBag(p.id,-1),""),element("span"),
+      button("+",() => changeBag(p.id,1),""));
+    control.replaceChildren(stepper);
+  }
+  const [minus,count,plus] = stepper.children;
   minus.setAttribute("aria-label","Decrease " + (p.title || p.id));
   plus.setAttribute("aria-label","Increase " + (p.title || p.id));
   minus.disabled = locked;
   plus.disabled = locked || !available(p) || qty >= p.qty;
-  stepper.append(minus,element("span","",Math.min(qty,Math.max(0,p.qty || 0))+" in bag"),plus);
-  control.replaceChildren(stepper);
+  count.textContent = Math.min(qty,Math.max(0,p.qty || 0))+" in bag";
 }
 function updateControls() {
   for (const node of document.querySelectorAll(".bag-control")) {
@@ -156,7 +164,6 @@ function draw(f) {
   $("status").textContent = slice.length ?
     `Showing ${start + 1}–${start + slice.length}${done ? " of " + result.length : ""} products` :
     isFiltered(f) ? "No products match these filters." : "There are no active products in the catalog yet.";
-  $("clear").hidden = !isFiltered(f);
   $("pages").hidden = !page && done && result.length <= pageSize;
   $("prev").disabled = page === 0;
   $("next").disabled = done && start + pageSize >= result.length;
@@ -168,6 +175,9 @@ async function refresh(reset = true) {
   if (reset) page = 0;
   $("problem").hidden = $("retry").hidden = true;
   const f = applied;
+  loadingCatalog = true;
+  $("products").setAttribute("aria-busy","true");
+  $("clear").hidden = !isFiltered(f);
   $("prev").disabled = $("next").disabled = true;
   $("status").textContent = isFiltered(f) && !done ? "Checking the full catalog…" : "Loading products…";
   try {
@@ -182,6 +192,11 @@ async function refresh(reset = true) {
     $("status").textContent = "";
     $("problem").textContent = friendly(error,"Couldn’t load the catalog.");
     $("problem").hidden = $("retry").hidden = false;
+  } finally {
+    if (ticket === revision) {
+      loadingCatalog = false;
+      $("products").removeAttribute("aria-busy");
+    }
   }
 }
 function pending() {
@@ -228,11 +243,11 @@ async function applyStock(updates) {
     setBag(await shop.bag.cap(updates));
     notify("Stock changed. Your bag now shows the available quantities.");
   }
-  if (dirty && applied) {
-    draw(applied);
+  if (dirty) {
+    if (applied && !loadingCatalog) draw(applied);
     if ($("detail").open && products.has(selectedDetail)) showProduct(products.get(selectedDetail));
   }
-  if ($("bag").open) renderBag();
+  if ((dirty || over) && $("bag").open) renderBag();
 }
 async function flushStock() {
   if (syncingStock || changingBag || checkoutBusy) return;
@@ -246,42 +261,61 @@ async function flushStock() {
   } catch (error) { notify(friendly(error,"Couldn’t refresh stock.")); }
   finally { syncingStock = false; }
 }
-async function changeBag(id,delta) {
-  if (changingBag || checkoutBusy || pending()) return;
-  changingBag = true;
-  updateControls();
-  try {
-    setBag(await shop.bag.change(id,delta));
-    if ($("bag").open) renderBag();
-  } catch (error) {
-    notify(friendly(error,"Couldn’t update your bag."));
-    try { await applyStock(await shop.findProducts([id])); } catch { /* Next checkout rechecks stock. */ }
-  } finally {
-    changingBag = false;
+function changeBag(id,delta) {
+  if (changingBag || bagLoad || checkoutBusy || pending()) return;
+  changingBag = (async () => {
+    try {
+      setBag(await shop.bag.change(id,delta));
+    } catch (error) {
+      notify(friendly(error,"Couldn’t update your bag."));
+      try { await applyStock(await shop.findProducts([id])); } catch { /* Next checkout rechecks stock. */ }
+    }
+  })().finally(() => {
+    changingBag = null;
     updateControls();
     if ($("bag").open) renderBag();
     flushStock();
-  }
+  });
+  updateControls();
+  if ($("bag").open) renderBag();
+  return changingBag;
 }
 function renderBag() {
-  let total = 0, valid = bagItems.length > 0;
-  const rows = bagItems.map(({productId,qty}) => {
-    const p = products.get(productId);
-    const row = element("div","bag-line");
-    row.append(element("h3","",p?.title || productId));
-    if (p) row.append(addButton(p));
-    const lineTotal = priceOK(p) ? p.pricePaise * qty : null;
-    if (!available(p) || qty > p.qty || !Number.isSafeInteger(lineTotal)) valid = false;
-    else total += lineTotal;
-    row.append(element("p","feedback",p ? price(p) + " each" : "Product unavailable"));
-    return row;
-  });
-  $("bag-lines").replaceChildren(...(rows.length ? rows : [element("p","","Your bag is empty.")]));
+  let total = 0, valid = bagReady && bagItems.length > 0;
+  if (bagReady) {
+    const lines = $("bag-lines");
+    if (!bagItems.length) lines.replaceChildren(element("p","","Your bag is empty."));
+    else {
+      const current = new Map([...lines.children].map(row => [row.dataset.product,row]));
+      const ids = new Set(bagItems.map(item => item.productId));
+      for (const [id,row] of current) if (!ids.has(id)) row.remove();
+      let next = lines.firstElementChild;
+      for (const {productId,qty} of bagItems) {
+        const p = products.get(productId) || {id:productId};
+        let row = current.get(productId);
+        if (!row) {
+          row = element("div","bag-line");
+          row.dataset.product = productId;
+          row.append(element("h3"),addButton(p),element("p","feedback"));
+        }
+        const [title,control,unitPrice] = row.children;
+        title.textContent = p.title || productId;
+        paintControl(control,p);
+        unitPrice.textContent = priceOK(p) ? price(p) + " each" : "Product unavailable";
+        if (row !== next) lines.insertBefore(row,next);
+        next = row.nextElementSibling;
+        const lineTotal = p.pricePaise * qty;
+        if (!available(p) || qty > p.qty || !Number.isSafeInteger(lineTotal)) valid = false;
+        else total += lineTotal;
+      }
+    }
+  }
+  const hasItems = bagReady && bagItems.length > 0;
   quotedTotal = valid && Number.isSafeInteger(total) ? total : null;
-  $("subtotal").textContent = !rows.length ? "" : quotedTotal === null ? "Review quantities before checkout" : "Subtotal " + asMoney(total);
+  $("subtotal").textContent = !hasItems ? "" : quotedTotal === null ? "Review quantities before checkout" : "Subtotal " + asMoney(total);
   const saved = pending();
   const creditOK = credit && quotedTotal !== null && quotedTotal <= credit.available;
-  $("checkout-form").hidden = !saved && (!rows.length || !bagReady);
+  $("checkout-form").hidden = !saved && !hasItems;
   $("payment-options").disabled = Boolean(saved) || checkoutBusy;
   $("pay-credit").disabled = !creditOK;
   if (saved) $("checkout-form").elements.method.value = saved.paymentMethod;
@@ -289,7 +323,8 @@ function renderBag() {
   $("credit-balance").textContent = creditMessage + (bagReady && !saved && creditSelected && !creditOK ?
     " Choose cash or reduce your bag to continue." : "");
   $("place-order").textContent = checkoutBusy ? "Placing order…" : saved ? "Retry this checkout" : "Place order";
-  $("place-order").disabled = checkoutBusy || changingBag || (!saved && (!bagReady || quotedTotal === null || (creditSelected && !creditOK)));
+  $("place-order").disabled = Boolean(checkoutBusy || changingBag || bagLoad ||
+    (!saved && (!bagReady || quotedTotal === null || (creditSelected && !creditOK))));
 }
 async function loadCredit() {
   credit = null;
@@ -300,16 +335,26 @@ async function loadCredit() {
   } catch (error) { creditMessage = friendly(error,"Couldn’t load store credit."); }
   if ($("bag").open) renderBag();
 }
-async function loadBag() {
+function loadBag() {
+  if (bagLoad) return bagLoad;
   bagReady = false;
-  setBag(await shop.bag.read());
-  await applyStock(await shop.findProducts(bagItems.map(i => i.productId)));
-  bagReady = true;
-  renderBag();
+  bagLoad = (async () => {
+    await changingBag;
+    setBag(await shop.bag.read());
+    await applyStock(await shop.findProducts(bagItems.map(i => i.productId)));
+    bagReady = true;
+  })().finally(() => {
+    bagLoad = null;
+    updateControls();
+    if ($("bag").open) renderBag();
+  });
+  updateControls();
+  if ($("bag").open) renderBag();
+  return bagLoad;
 }
 async function openBag() {
   $("bag-source").textContent = shop.bag.label;
-  $("bag-lines").textContent = "Loading items…";
+  $("bag-lines").replaceChildren(element("p","","Loading items…"));
   $("subtotal").textContent = "";
   $("checkout-form").hidden = true;
   if (!pending()) $("checkout-form").elements.method.value = "cash";
@@ -322,7 +367,7 @@ async function openBag() {
   try { await loadBag(); }
   catch (error) {
     renderBag();
-    $("bag-lines").textContent = friendly(error,"Couldn’t refresh your bag.");
+    $("bag-lines").replaceChildren(element("p","",friendly(error,"Couldn’t refresh your bag.")));
   }
 }
 function sameItems(a,b) {
@@ -435,8 +480,8 @@ async function start() {
     $("sign-out").hidden = false;
     $("sign-out").onclick = () => Promise.resolve(shop.signOut()).catch(() => notify("Sign-out failed. Try again."));
     pendingKey = "buyit.checkout." + shop.uid;
-    $("bag-open").disabled = $("orders-open").disabled = false;
     try { setBag(await shop.bag.read()); } catch { $("bag-count").textContent = "–"; }
+    $("bag-open").disabled = $("orders-open").disabled = false;
     const all = await shop.categories();
     all.sort((a,b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
     for (const c of all) {

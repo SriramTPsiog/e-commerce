@@ -172,10 +172,11 @@ function render() {
   $("content").replaceChildren(group("tools",refresh),renderers[view]());
 }
 
-function showEditor(title,fields,save) {
+function showEditor(title,fields,save,saveLabel = "Save changes") {
   $("editor-title").textContent = title;
   $("fields").replaceChildren(fields);
   $("save").hidden = !save;
+  $("save").textContent = saveLabel;
   notice("",false,"editor-status");
   applyEditor = save;
   $("editor").showModal();
@@ -399,22 +400,31 @@ function customerEditor(customer) {
 }
 function creditEditor(customer) {
   const account = customer.account;
-  const info = element("p",account ? "Outstanding balance " + cash(account.outstandingPaise) : "This customer has no credit account.");
-  showEditor("Credit limit for " + customer.name,
-    group("field-grid",info,label("Credit limit in ₹",number("limit",(account?.creditLimitPaise ?? 0)/100,".01"))),async data => {
+  const info = account ? "Outstanding balance " + cash(account.outstandingPaise) :
+    "Set an initial limit to create a store credit account.";
+  const fields = group("field-grid",element("p",info,"wide"),
+    label("Credit limit in ₹",number("limit",account ? (account.creditLimitPaise ?? 0)/100 : "",".01")));
+  if (!customer.login) {
+    fields.append(element("p","The customer needs a linked sign-in before they can use store credit.","wide muted"));
+  }
+  const title = (account ? "Credit limit for " : "Set up store credit for ") + customer.name;
+  showEditor(title,fields,async data => {
       const limit = paise(data,"limit"), ref = doc(db,"creditAccounts",customer.accountId);
       const committed = await runTransaction(db,async tx => {
         const latest = await tx.get(ref);
-        if (latest.exists()) {
+        if (latest.exists() !== Boolean(account) || (account && latest.get("creditLimitPaise") !== account.creditLimitPaise)) {
+          throw Error("This credit account changed. Refresh Customers and reopen it.");
+        }
+        if (account) {
           tx.update(ref,{creditLimitPaise:limit});
           return {...latest.data(),creditLimitPaise:limit};
         }
-        const account = {creditLimitPaise:limit,outstandingPaise:0};
-        tx.set(ref,account);
-        return account;
+        const created = {creditLimitPaise:limit,outstandingPaise:0};
+        tx.set(ref,created);
+        return created;
       });
       localUpdate("creditAccounts",customer.accountId,committed);
-    });
+    },account ? "Save changes" : "Create credit account");
 }
 function customersView() {
   const customers = directory(), results = group("customer-list");
@@ -422,7 +432,7 @@ function customersView() {
     customers.filter(c => contains(query,c.name,c.email,c.id,c.login?.id)).map(c => [
       labelled(c.name,c.id),labelled(c.email || "—",c.mobile),c.account ? cash(c.account.creditLimitPaise) : "—",
       c.account ? cash(c.account.outstandingPaise) : "—",c.record.active === false ? "Purchasing disabled" : c.login ? "Linked" : "No login linked",
-      group("row",button("Edit",() => customerEditor(c),true),button("Credit limit",() => creditEditor(c),true))
+      group("row",button("Edit",() => customerEditor(c),true),button(c.account ? "Credit limit" : "Set up credit",() => creditEditor(c),true))
     ])));
   paint("");
   const users = table(["Account","Role","Auth UID"],list("users").map(u => [
@@ -640,9 +650,10 @@ function overviewView() {
   const orders = list("orders").sort(orderSort);
   const totals = aggregate(orders.filter(o => !["cancelled","refunded"].includes(o.status) && !["void","refunded"].includes(o.paymentStatus)));
   const products = list("products");
+  const lowStock = products.filter(p => p.active && ["Low stock","Out of stock"].includes(stockLabel(p.qty)));
   return group("stack",
     group("metrics",metric("Order value",cash(totals.total)),metric("Orders to fulfill",orders.filter(o=>nextStatus[o.status]).length),
-      metric("Low or out of stock",products.filter(p=>p.active && p.qty<(settings().lowStockBelow ?? 15)).length),
+      metric("Active products low or out of stock",lowStock.length),
       metric("Customers",directory().length)),
     panel("Recent orders",table(orderColumns,orderRows(orders.slice(0,8)))),
     panel("Inventory",group("tools",button("Manage products",() => openView("Products")),button("Open reports",() => openView("Reports"),true))));
