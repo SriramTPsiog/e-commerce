@@ -297,3 +297,54 @@ dialog::backdrop { background: #2119258c; }
 @media (prefers-reduced-motion: reduce) {
   button { transition: none; }
 }
+.skip-link {
+  position: fixed;
+  inset: 12px auto auto 12px;
+  z-index: 2;
+  transform: translateY(calc(-100% - 16px));
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 650;
+}
+.skip-link:focus { transform: none; }
+.report-filters { row-gap: 12px; }
+.report-filters select, .report-filters input { width: 100%; }
+.report-filters > label { flex: 0 1 140px; }
+.report-filters button, .report-export button { white-space: nowrap; }
+.report-note { margin: 0 0 15px; }
+.report-export {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 14px;
+  border: 1px solid #efd6e0;
+  border-radius: 10px;
+  background: #fdf1f5;
+}
+.report-range {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.report-export-tools {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.report-inventory-tools { margin-bottom: 10px; }
+.report-inventory-tools p { margin: 0; }
+
+@media (max-width: 550px) {
+  .report-filters { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .report-filters > button { grid-column: 1 / -1; }
+  .report-export-tools { width: 100%; }
+  .report-export-tools label { flex: 1 1 145px; }
+  .report-export-tools select, .report-export-tools button { width: 100%; }
+}

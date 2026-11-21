@@ -14,6 +14,7 @@ const rupees = new Intl.NumberFormat("en-IN", { style:"currency", currency:"INR"
 const whole = new Intl.NumberFormat("en-IN");
 const dateText = new Intl.DateTimeFormat("en-IN", { dateStyle:"medium", timeZone:"Asia/Kolkata" });
 const dayKey = new Intl.DateTimeFormat("en-CA", { year:"numeric",month:"2-digit",day:"2-digit",timeZone:"Asia/Kolkata" });
+const reportMonth = new Intl.DateTimeFormat("en-IN", { month:"long",year:"numeric",timeZone:"Asia/Kolkata" });
 const screens = {
   Overview:["orders","products","categories","customers","users","creditAccounts","shopSettings"],
   Products:["products","categories","shopSettings"],
@@ -26,7 +27,7 @@ let view = "Overview", activeAdmin, request = 0, applyEditor;
 let productPage = 0;
 const productFilter = { term:"", category:"", stock:"" };
 const orderFilter = { term:"", status:"", method:"" };
-const reportFilter = { from:"", to:"", method:"" };
+const reportFilter = { period:"all", month:"", year:"", from:"", to:"", method:"" };
 
 function element(tag, text, className) {
   const node = document.createElement(tag);
@@ -54,7 +55,11 @@ function table(headers, rows) {
   if (!rows.length) return element("p","No records match.", "muted");
   const grid = element("table");
   const head = grid.createTHead().insertRow();
-  headers.forEach(name => head.append(element("th",name)));
+  headers.forEach(name => {
+    const heading = element("th",name);
+    heading.scope = "col";
+    head.append(heading);
+  });
   const body = grid.createTBody();
   rows.forEach(row => {
     const tr = body.insertRow();
@@ -449,11 +454,52 @@ function aggregate(orders) {
   }
   return result;
 }
+function reportDay(date) {
+  if (!date || !Number.isFinite(date.getTime())) return "";
+  const parts = Object.fromEntries(dayKey.formatToParts(date).map(part => [part.type,part.value]));
+  return parts.year.padStart(4,"0") + "-" + parts.month + "-" + parts.day;
+}
+function resolveReportDates(period,month,year,from,to) {
+  if (period === "month") {
+    if (!/^(?!0000)[0-9]{4}-(0[1-9]|1[0-2])$/.test(month)) throw Error("Enter a month in YYYY-MM format.");
+    const [y,m] = month.split("-").map(Number);
+    const end = new Date(0);
+    end.setUTCFullYear(y,m,0);
+    return {from:month + "-01",to:month + "-" + end.getUTCDate()};
+  }
+  if (period === "year") {
+    if (!/^[0-9]{1,4}$/.test(year) || !Number(year)) throw Error("Enter a year from 1 to 9999.");
+    const value = year.padStart(4,"0");
+    return {from:value + "-01-01",to:value + "-12-31"};
+  }
+  if (period === "custom") {
+    if ((!from && !to) || ![from,to].filter(Boolean).every(value => /^(?!0000)[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))) {
+      throw Error("Choose a start date, an end date, or both.");
+    }
+    if (from && to && from > to) throw Error("End date must be on or after start date.");
+    return {from,to};
+  }
+  return {from:"",to:""};
+}
+function reportPeriodName() {
+  const {period,from,to} = reportFilter;
+  if (period === "month") return from.slice(0,7);
+  if (period === "year") return from.slice(0,4);
+  return from && to ? from + "_to_" + to : from ? "from-" + from : to ? "through-" + to : "all-time";
+}
+function reportPeriodLabel() {
+  const {period,from,to} = reportFilter;
+  if (period === "all") return "All time";
+  if (period === "year") return from.slice(0,4);
+  if (period === "month") return reportMonth.format(new Date(from + "T00:00:00Z"));
+  const label = day => dateText.format(new Date(day + "T00:00:00Z"));
+  return from && to ? label(from) + " – " + label(to) : from ? "From " + label(from) : "Through " + label(to);
+}
 function reportOrders() {
   return list("orders").filter(o => {
     if (["cancelled","refunded"].includes(o.status) || ["void","refunded"].includes(o.paymentStatus)) return false;
     if (reportFilter.method && o.paymentMethod !== reportFilter.method) return false;
-    const day = orderDate(o) ? dayKey.format(orderDate(o)) : "";
+    const day = reportDay(orderDate(o));
     return (!reportFilter.from || day >= reportFilter.from) && (!reportFilter.to || day && day <= reportFilter.to);
   });
 }
@@ -471,50 +517,124 @@ function csv(name, rows) {
   const a = element("a"); a.href=url; a.download=name; a.click(); setTimeout(() => URL.revokeObjectURL(url),1000);
 }
 function reportsView() {
-  const results = group("reports");
-  const from = input("date","from",reportFilter.from), to = input("date","to",reportFilter.to);
+  const form = element("form",undefined,"tools report-filters");
+  const mode = select("period",[["all","All time"],["month","Month"],["year","Year"],["custom","Custom dates"]],reportFilter.period);
+  const today = reportDay(new Date());
+  const month = input("month","month",reportFilter.month || today.slice(0,7));
+  month.placeholder = "YYYY-MM";
+  month.pattern = "[0-9]{4}-(0[1-9]|1[0-2])";
+  const year = number("year",reportFilter.year || today.slice(0,4));
+  year.min = "1";
+  year.max = "9999";
+  const from = input("date","from",reportFilter.period === "custom" ? reportFilter.from : "");
+  const to = input("date","to",reportFilter.period === "custom" ? reportFilter.to : "");
   const method = select("method",[["","All payments"],["cash","Cash"],["credit","Credit"]],reportFilter.method);
+  const submit = element("button","Apply filters");
+  submit.type = "submit";
+
+  const periodFields = [
+    [month,label("Report month",month),"month"],
+    [year,label("Report year",year),"year"],
+    [from,label("Start date",from),"custom"],
+    [to,label("End date",to),"custom"]
+  ];
+  function showPeriodFields() {
+    for (const [field,wrapper,period] of periodFields) {
+      wrapper.hidden = field.disabled = mode.value !== period;
+      field.required = !field.disabled && period !== "custom";
+    }
+  }
+  mode.onchange = showPeriodFields;
+  showPeriodFields();
+  form.append(label("Date range",mode),...periodFields.map(([,wrapper]) => wrapper),
+    label("Payment method",method),submit);
+
+  const results = group("reports");
+  const rangeStatus = element("p",undefined,"report-range");
+  rangeStatus.setAttribute("role","status");
+  const exportKind = select("exportKind",[["summary","Sales summary"],["orders","Order details"],
+    ["customers","Customer payments"],["categories","Sales by category"],["products","Units by product"]],"summary");
+  const exportButton = button("Download CSV",() => {
+    const { name, rows } = reportExports[exportKind.value]();
+    csv("buyit-" + name + "-" + reportPeriodName() + "-" + (reportFilter.method || "all-payments") + ".csv", rows);
+  });
+  let reportExports;
+  const exportTools = group("report-export-tools",label("CSV report",exportKind),exportButton);
+  const exportBar = group("report-export",rangeStatus,exportTools);
+
   function paint() {
-    const orders = reportOrders(), totals = aggregate(orders);
-    const top = rank(totals.products.values()).slice(0,10);
+    const orders = reportOrders().sort(orderSort);
+    const totals = aggregate(orders);
+    const products = rank(totals.products.values());
+    const top = products.slice(0,10);
     const cashByCustomer = aggregate(orders.filter(o => o.paymentMethod === "cash")).customers;
     const creditByCustomer = aggregate(orders.filter(o => o.paymentMethod === "credit")).customers;
-    const paymentRows = rank(totals.customers.values()).map(c => [
-      labelled(c.name,c.id),cash(cashByCustomer.get(c.id)?.value),cash(creditByCustomer.get(c.id)?.value),cash(c.value)
+    const customers = rank(totals.customers.values());
+    const categories = rank(totals.categories.values());
+    const cashBy = c => cashByCustomer.get(c.id)?.value ?? 0;
+    const creditBy = c => creditByCustomer.get(c.id)?.value ?? 0;
+    const paymentRows = customers.map(c => [
+      labelled(c.name,c.id),cash(cashBy(c)),cash(creditBy(c)),cash(c.value)
     ]);
     const bottom = rank(list("products").filter(p => p.active && p.qty > 0).map(p =>
       totals.products.get(p.id) || {id:p.id,name:p.title,value:0}),false).slice(0,10);
     const ranked = (header,values,format) => table([header,"Total"],values.map(r=>[r.name,format(r.value)]));
+    const payment = reportFilter.method ? status(reportFilter.method) : "all payments";
+    rangeStatus.textContent = reportPeriodLabel() + " · " + payment + " · " + whole.format(orders.length) +
+      (orders.length === 1 ? " order" : " orders");
+    reportExports = {
+      summary: () => ({ name:"sales-summary", rows:[
+        ["From (IST)","Through (IST)","Payment filter","Orders","Units","Order value paise","Cash paise","Credit paise"],
+        [reportFilter.from,reportFilter.to,reportFilter.method || "all",orders.length,totals.units,totals.total,totals.cash,totals.credit]
+      ] }),
+      orders: () => ({ name:"orders", rows:[
+        ["Order ID","Customer ID","Customer","Date (IST)","Method","Payment status","Order status","Total paise"],
+        ...orders.map(o => [o.id,o.customerId,o.customerName,reportDay(orderDate(o)),o.paymentMethod,o.paymentStatus,o.status,o.totalPaise])
+      ] }),
+      customers: () => ({ name:"customer-payments", rows:[
+        ["Customer ID","Customer","Cash paise","Credit paise","Total paise"],
+        ...customers.map(c => [c.id,c.name,cashBy(c),creditBy(c),c.value])
+      ] }),
+      categories: () => ({ name:"sales-by-category", rows:[
+        ["Category ID","Category","Total paise"],...categories.map(c => [c.id,c.name,c.value])
+      ] }),
+      products: () => ({ name:"units-by-product", rows:[
+        ["Product ID","Product","Units sold"],...products.map(p => [p.id,p.name,p.value])
+      ] })
+    };
+    const inventoryExport = button("Export inventory CSV",() => csv("buyit-inventory.csv",
+      [["Product ID","Title","Category","Quantity","Stock status","Active","Price paise"],...list("products").map(p=>
+        [p.id,p.title,category(p.categoryId),p.qty,stockLabel(p.qty),p.active,p.pricePaise])]),true);
+
     results.replaceChildren(
       group("metrics",metric("Orders",whole.format(orders.length)),metric("Order value",cash(totals.total)),
         metric("Cash order value",cash(totals.cash)),metric("Credit order value",cash(totals.credit))),
-      group("split",panel("Top 10 customers",ranked("Customer",rank(totals.customers.values()).slice(0,10),cash)),
-        panel("Sales by category",ranked("Category",rank(totals.categories.values()),cash)),
+      group("split",panel("Top 10 customers",ranked("Customer",customers.slice(0,10),cash)),
+        panel("Sales by category",ranked("Category",categories,cash)),
         panel("Top 10 products by units",ranked("Product",top,n=>whole.format(n))),
         panel("Bottom 10 stocked products by units",ranked("Product",bottom,n=>whole.format(n)))),
       panel("Cash and credit by customer",table(["Customer","Cash","Credit","Total"],paymentRows)),
-      panel("Orders by payment method",button("Export orders CSV",() => csv("buyit-orders.csv",
-        [["Order ID","Customer ID","Customer","Date","Method","Payment status","Order status","Total paise"],...orders.map(o=>
-          [o.id,o.customerId,o.customerName,displayDate(o),o.paymentMethod,o.paymentStatus,o.status,o.totalPaise])]),true),
-        table(orderColumns,orderRows([...orders].sort(orderSort)))),
-      panel("Stock report",button("Export inventory CSV",() => csv("buyit-inventory.csv",
-        [["Product ID","Title","Category","Quantity","Stock status","Active","Price paise"],...list("products").map(p=>
-          [p.id,p.title,category(p.categoryId),p.qty,stockLabel(p.qty),p.active,p.pricePaise])]),true),
+      panel("Orders by payment method",table(orderColumns,orderRows(orders))),
+      panel("Current inventory",group("row report-inventory-tools",
+        element("p","Stock levels are a current snapshot.","muted"),inventoryExport),
         table(["Product","Category","Quantity","Stock status"],list("products").filter(p => stockLabel(p.qty)!=="In range").slice(0,20).map(p=>
           [p.title,category(p.categoryId),p.qty,stockLabel(p.qty)])),
         element("p","Showing up to 20 flagged products. The CSV includes all inventory.","muted")));
   }
-  const form = element("form",undefined,"tools");
-  const submit = element("button","Apply filters"); submit.type="submit";
-  form.append(label("Start date (India)",from),label("End date (India)",to),label("Payment method",method),submit);
+
   form.onsubmit = event => {
     event.preventDefault();
-    if (from.value && to.value && from.value > to.value) { notice("End date must be on or after start date.",true); return; }
-    Object.assign(reportFilter,{from:from.value,to:to.value,method:method.value});
-    notice(); paint();
+    try {
+      const dates = resolveReportDates(mode.value,month.value,year.value,from.value,to.value);
+      Object.assign(reportFilter,dates,{period:mode.value,month:month.value,year:year.value,method:method.value});
+      notice();
+      paint();
+    } catch (error) { notice(error.message,true); }
   };
   paint();
-  return group("stack",panel("Sales and inventory reports",form,element("p","Totals include placed orders and exclude cancelled, refunded and void orders.","muted")),results);
+  return group("stack",panel("Sales reports",form,
+    element("p","Dates use India Standard Time. Sales totals exclude cancelled, refunded and void orders.","muted report-note"),
+    exportBar),results);
 }
 function overviewView() {
   const orders = list("orders").sort(orderSort);
