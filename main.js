@@ -10,12 +10,7 @@ import {
   getDoc
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAvK5ih60_vYAouBxXOM-5htCy63gxLWd0",
-  authDomain: "e-commerce-psiog.firebaseapp.com",
-  projectId: "e-commerce-psiog",
-  appId: "1:896721924281:web:768af4a291f11b7448ab68"
-};
+import { firebaseConfig } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fffaf0">
+  <title>Shop Marvel collectibles · BuyIt</title>
+  <link rel="stylesheet" href="./css/customer.css">
+</head>
+<body>
+  <a class="skip" href="#catalog">Skip to products</a>
+  <header class="mast">
+    <div class="bar wrap">
+      <a class="logo" href="./customer.html" aria-label="BuyIt shop">BUY<span>IT</span><i aria-hidden="true">:)</i></a>
+      <a class="catalog-link" href="#catalog">Shop</a>
+      <div class="account">
+        <span id="account-name"></span>
+        <button id="orders-open" class="quiet" disabled>My orders</button>
+        <button class="bag-button" id="bag-open" disabled>Bag <b id="bag-count">0</b></button>
+        <button id="sign-out" class="quiet" hidden>Sign out</button>
+      </div>
+    </div>
+  </header>
+  <main class="wrap">
+    <section class="hero" aria-labelledby="collection-title">
+      <img class="hero-art" src="./assets/shop/collection.webp" alt="Captain America’s shield, Iron Man’s gauntlet, and Thor’s hammer bursting out of a parcel." fetchpriority="high" width="1536" height="1024">
+      <div class="hero-copy">
+        <h1 id="collection-title">The Marvel<br><em>collection.</em></h1>
+        <a href="#catalog">Browse collectibles</a>
+      </div>
+    </section>
+
+    <section class="catalog" id="catalog" aria-labelledby="shop-title">
+      <form id="filters">
+      <div class="catalog-head">
+        <h2 id="shop-title">Shop collectibles</h2>
+        <label class="search"><span class="sr">Search products by name or ID</span>
+          <i aria-hidden="true"></i><input type="search" id="search" placeholder="Search products…" autocomplete="off" disabled>
+        </label>
+      </div>
+      <div class="filter-row">
+        <label>Category<select id="category" disabled><option value="">All categories</option></select></label>
+        <label>Sort by<select id="sort" disabled>
+          <option value="catalog">Catalog order</option><option value="low">Price: low to high</option>
+          <option value="high">Price: high to low</option><option value="name">Name A–Z</option>
+          <option value="reverse-name">Name Z–A</option>
+          <option value="stock-high">Stock highest first</option><option value="stock-low">Stock lowest first</option>
+          <option value="category-name">Category A–Z</option>
+        </select></label>
+        <label class="checkbox"><input id="in-stock" type="checkbox" disabled> In stock only</label>
+        <button type="submit" class="action" id="apply" disabled>Apply filters</button>
+        <button type="button" class="quiet" id="clear" hidden>Clear filters</button>
+      </div>
+      </form>
+      <p class="feedback" id="status" role="status">Loading your shop…</p>
+      <p class="warning" id="problem" role="alert" hidden></p>
+      <button class="action secondary" id="retry" hidden>Try again</button>
+      <div class="grid" id="products"></div>
+      <nav class="pages" id="pages" aria-label="Catalog pages" hidden>
+        <button id="prev" class="action secondary">Previous</button>
+        <span id="page-label"></span><button id="next" class="action secondary">Next</button>
+      </nav>
+    </section>
+  </main>
+  <dialog id="detail" aria-labelledby="detail-title">
+    <div class="dialog-head"><h2>Product details</h2><button class="quiet" data-close>Close</button></div>
+    <div id="detail-body" class="detail-body"></div>
+  </dialog>
+  <dialog id="bag" aria-labelledby="bag-title">
+    <div class="dialog-head"><h2 id="bag-title">Your bag</h2><button class="quiet" data-close>Close</button></div>
+    <p id="bag-source" class="feedback"></p>
+    <div id="bag-lines"></div><p id="subtotal" class="subtotal"></p>
+    <form id="checkout-form" hidden>
+      <fieldset id="payment-options"><legend>Pay with</legend>
+        <label><input type="radio" name="method" value="cash" checked> Cash on delivery</label>
+        <label><input id="pay-credit" type="radio" name="method" value="credit"> Store credit</label>
+      </fieldset>
+      <button id="place-order" class="action" type="submit">Place order</button>
+    </form>
+    <p id="credit-balance" class="feedback"></p>
+    <p id="checkout-status" class="checkout-message" role="status"></p>
+  </dialog>
+  <dialog id="orders" aria-labelledby="orders-title">
+    <div class="dialog-head"><h2 id="orders-title">My orders</h2><button class="quiet" data-close>Close</button></div>
+    <div id="order-list" aria-live="polite"></div>
+    <button class="quiet" id="reload-orders">Refresh orders</button>
+  </dialog>
+  <div id="announcement" class="toast" role="status"></div>
+  <noscript>Turn on JavaScript to load the BuyIt catalog.</noscript>
+  <script type="module" src="./customer.js"></script>
+</body>
+</html>
