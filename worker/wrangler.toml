@@ -1,0 +1,8 @@
+name = "buyit-checkout"
+main = "index.mjs"
+compatibility_date = "2025-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+FIREBASE_PROJECT_ID = "e-commerce-psiog"
+SHOP_ORIGIN = "https://YOUR-GITHUB-USERNAME.github.io"
